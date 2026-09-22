@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="title">
+  <title>Jarvis mark</title>
+  <path fill="#6698ff" d="M16 2.5 28 7v8.6c0 7.1-4.7 11.8-12 14-7.3-2.2-12-6.9-12-14V7l12-4.5Z"/>
+  <path fill="#0d0f15" d="M11 10h4v9.2c0 1.7-.7 2.6-2.2 2.6-.9 0-1.8-.3-2.6-.8v3.3c1 .5 2.2.8 3.5.8 3.5 0 5.3-2.1 5.3-5.9V10h-4v-2h-4v2Z"/>
+</svg>
