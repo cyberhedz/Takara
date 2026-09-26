@@ -55,6 +55,7 @@ import ListItemIcon from '@mui/material/ListItemIcon'
 import Switch from '@mui/material/Switch'
 import { QRCodeSVG } from 'qrcode.react'
 import { takaraTheme } from './theme'
+import ChatAssistant from './ChatAssistant'
 
 // All product photography is bundled locally (src/assets) so it survives a
 // production build — the previous version pointed at short-lived, single-use
@@ -1433,6 +1434,15 @@ function App() {
           onClose={() => setMenuOpen(false)}
           onNavigate={(target) => { setMenuOpen(false); setView(target) }}
           open={menuOpen}
+        />
+
+        <ChatAssistant
+          context={
+            view === 'detail' || view === 'journal'
+              ? { name: selectedSake.name, classification: selectedSake.classification }
+              : null
+          }
+          navVisible={!NO_NAV_VIEWS.has(view)}
         />
       </Box>
     </ThemeProvider>
