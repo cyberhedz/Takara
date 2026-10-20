@@ -1,0 +1,4 @@
+cognee==1.6.5
+fastapi==0.150.0
+python-dotenv==1.2.4
+uvicorn==0.54.0

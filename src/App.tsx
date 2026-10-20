@@ -1141,6 +1141,24 @@ function Cellar({
 
 function Club({ onClose }: { onClose: () => void }) {
   const memberQrValue = `https://www.takarasake.com/tasting-room/?member=${MEMBER_ID}`
+  const [checkIn, setCheckIn] = useState<'idle' | 'sending' | 'returning' | 'new' | 'error'>('idle')
+
+  // Stands in for staff scanning the QR code. The guest sees a welcome; what we
+  // remember about them goes to the tasting-room team in Band, not to this screen.
+  async function sendCheckIn() {
+    setCheckIn('sending')
+    try {
+      const result = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: MEMBER_ID, type: 'checkin', data: { guest_name: 'John' } }),
+      })
+      setCheckIn(result.ok ? ((await result.json())?.returning ? 'returning' : 'new') : 'error')
+    } catch {
+      setCheckIn('error')
+    }
+  }
+
   return (
     <Box component="main" sx={{ bgcolor: 'background.paper', minHeight: 1, pb: 4 }}>
       <Stack direction="row" sx={{ justifyContent: 'flex-end', px: 2, py: 1.5 }}>
@@ -1175,6 +1193,18 @@ function Club({ onClose }: { onClose: () => void }) {
           <Typography color="text.secondary" sx={{ fontSize: 12, mt: 1.75 }}>
             Show this code at the Tasting Room to check in and earn points
           </Typography>
+          {checkIn === 'returning' || checkIn === 'new' ? (
+            <Typography role="status" sx={{ fontSize: 14, fontWeight: 600, mt: 2 }}>
+              {checkIn === 'returning' ? 'Welcome back, John. Your host has your tasting notes.' : 'Welcome to the Tasting Room, John.'}
+            </Typography>
+          ) : (
+            <Button disabled={checkIn === 'sending'} onClick={sendCheckIn} startIcon={<QrCodeScannerIcon />} sx={{ mt: 2 }} variant="outlined">
+              {checkIn === 'sending' ? 'Checking in…' : 'Check in'}
+            </Button>
+          )}
+          {checkIn === 'error' && (
+            <Typography color="error" role="alert" sx={{ fontSize: 13, mt: 1 }}>Could not check in. Please ask a host.</Typography>
+          )}
         </Box>
 
         <Stack direction="row" sx={{ justifyContent: 'space-between', mt: 2.5 }}>

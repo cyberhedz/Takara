@@ -7,3 +7,5 @@ storybook-static/
 !.env.example
 .vercel/
 .vercel
+memory/events.jsonl
+__pycache__/
