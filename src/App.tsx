@@ -120,6 +120,9 @@ const sakes = [
 // Takara's internal "Nendo" product sheet). The other four Discover cards
 // fall back to a light-weight detail view built from their card data (see
 // `resolveSakeDetail`), since we don't have verified specs for them yet.
+// The signed-in Sake Club member. There is no login yet, so the demo uses one member.
+const MEMBER_ID = 'TK-004821'
+
 type SakeDetail = {
   classification: string
   name: string
@@ -825,16 +828,41 @@ function Journal({ sake, onBack }: { sake: SakeDetail; onBack: () => void }) {
   const [rating, setRating] = useState(4)
   const [notes, setNotes] = useState('')
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [selectedNotes, setSelectedNotes] = useState<string[]>(['Silky', 'Umami'])
   const flavourNotes = ['Pear', 'White flower', 'Melon', 'Silky', 'Umami', 'Clean finish', 'Dry', 'Mineral']
   const toggleNote = (note: string) => setSelectedNotes((current) => current.includes(note) ? current.filter((item) => item !== note) : [...current, note])
+
+  async function save() {
+    if (saving || saved) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const result = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          member_id: MEMBER_ID,
+          type: 'journal',
+          data: { sake: sake.name, classification: sake.classification, rating, flavours: selectedNotes, notes: notes.trim() },
+        }),
+      })
+      if (result.ok) setSaved(true)
+      else setSaveError((await result.json())?.error || 'Could not save your note.')
+    } catch {
+      setSaveError('Could not save your note. Check your connection and try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <Box component="main" sx={{ bgcolor: 'background.paper', minHeight: 1 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', px: 2, height: 52 }}>
         <IconButton aria-label="Back" onClick={onBack}><ArrowBackIcon /></IconButton>
         <Typography sx={{ fontSize: 15, fontWeight: 600 }}>New Tasting Note</Typography>
-        <Button onClick={() => setSaved(true)}>Save</Button>
+        <Button disabled={saving} onClick={save}>{saved ? 'Saved' : 'Save'}</Button>
       </Stack>
 
       <Box sx={{ px: 3, pb: 4.25 }}>
@@ -898,9 +926,12 @@ function Journal({ sake, onBack }: { sake: SakeDetail; onBack: () => void }) {
           value={notes}
         />
 
-        <Button fullWidth onClick={() => setSaved(true)} size="large" sx={{ mt: 3 }} variant="contained">
-          {saved ? 'Tasting Note Saved' : 'Save Tasting Note'}
+        <Button disabled={saving} fullWidth onClick={save} size="large" sx={{ mt: 3 }} variant="contained">
+          {saved ? 'Tasting Note Saved' : saving ? 'Saving…' : 'Save Tasting Note'}
         </Button>
+        {saveError && (
+          <Typography color="error" role="alert" sx={{ fontSize: 13, mt: 1.5, textAlign: 'center' }}>{saveError}</Typography>
+        )}
       </Box>
     </Box>
   )
@@ -1109,7 +1140,7 @@ function Cellar({
 }
 
 function Club({ onClose }: { onClose: () => void }) {
-  const memberQrValue = 'https://www.takarasake.com/tasting-room/?member=TK-004821'
+  const memberQrValue = `https://www.takarasake.com/tasting-room/?member=${MEMBER_ID}`
   return (
     <Box component="main" sx={{ bgcolor: 'background.paper', minHeight: 1, pb: 4 }}>
       <Stack direction="row" sx={{ justifyContent: 'flex-end', px: 2, py: 1.5 }}>
