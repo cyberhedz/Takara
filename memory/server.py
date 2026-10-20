@@ -94,8 +94,7 @@ async def notify_band(text: str) -> None:
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
     )
     _, stderr = await process.communicate()
-    if process.returncode:
-        print(f"Band notify failed ({process.returncode}): {stderr.decode().strip()}")
+    print(f"Band notify: {'sent' if not process.returncode else f'failed ({process.returncode}): {stderr.decode().strip()}'}", flush=True)
 
 
 @app.post("/events", status_code=202)
@@ -113,15 +112,17 @@ async def save_event(event: Event, background: BackgroundTasks) -> dict[str, Any
 
     async with cognify_lock:
         await cognee.add(text, dataset_name=dataset)
-    background.add_task(cognify_dataset, dataset)
 
     if memory is None:
+        background.add_task(cognify_dataset, dataset)
         return {"saved": True, "text": text}
     if memory["known"]:
         alert = f"Returning guest {event.member_id} just checked in. What we know:\n{memory['answer']}"
     else:
         alert = f"New guest {event.member_id} just checked in. No history yet; please capture a quick note."
+    # Background tasks run in order: alert the room first, then spend ~20 s cognifying.
     background.add_task(notify_band, alert)
+    background.add_task(cognify_dataset, dataset)
     return {"saved": True, "text": text, "returning": memory["known"], "recall": memory["answer"]}
 
 
