@@ -149,3 +149,49 @@ def events(member_id: str) -> list[dict[str, Any]]:
         return []
     with EVENT_LOG.open() as log:
         return [row for row in map(json.loads, log) if row["member_id"] == member_id]
+
+
+# Free-text tasting notes keyed by guest name, for the OKAERI home page and memory.py.
+NOTES_DATASET = "okaeri_notes"
+TODAYS_POURS = (
+    "N-end (Kimoto Junmai, rich umami), Hizo Koshu (15-year aged), Sho Chiku Bai Junmai Daiginjo, "
+    "REI Junmai Daiginjo (light, elegant), MU|WA Bourbon Barrel Aged, Shirakabegura Junmai Daiginjo, "
+    "Sho Chiku Bai Premium Ginjo, Nigori Silky Mild, Shirakabegura MIO (sparkling)"
+)
+
+
+class Note(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+@app.post("/notes")
+async def remember_note(note: Note) -> dict[str, Any]:
+    """Add a note and cognify it before returning, so an immediate recall can see it."""
+    now = datetime.now(timezone.utc)
+    text = f"Tasting note, {now.strftime('%A %d %B %Y')}: {note.text.strip()}"
+    with EVENT_LOG.open("a") as log:
+        log.write(json.dumps({"at": now.isoformat(), "member_id": "-", "type": "note", "text": text}) + "\n")
+    async with cognify_lock:
+        await cognee.add(text, dataset_name=NOTES_DATASET)
+        await cognee.cognify(datasets=[NOTES_DATASET])
+    return {"saved": True, "text": text}
+
+
+@app.get("/notes/recall")
+async def recall_note(name: str) -> dict[str, Any]:
+    question = (
+        f"What do we remember about {name}: what they tasted, liked, disliked, asked and planned? "
+        f"Then recommend one sake they have not tried yet from today's Takara pours ({TODAYS_POURS}), "
+        "with one sentence on why, based only on what we remember. Refer to the guest as 'they'. "
+        "If we remember nothing about them, say so."
+    )
+    try:
+        results = await cognee.search(query_type=SearchType.GRAPH_COMPLETION, query_text=question, datasets=[NOTES_DATASET])
+    except Exception as error:  # no notes yet
+        return {"name": name, "known": False, "answer": "", "detail": type(error).__name__}
+    answers = [
+        str(item)
+        for result in results
+        for item in (result.get("search_result") if isinstance(result, dict) else [result]) or []
+    ]
+    return {"name": name, "known": bool(answers), "answer": "\n".join(answers)}

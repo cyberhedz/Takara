@@ -11,7 +11,8 @@ cyberhedzmedia/qualifier-groq, and answers any message that mentions a member ID
 
 Run (from the repo root, memory service on :8000), in its own terminal, not inside Claude Code:
     python agents/qualifier.py --room <band-chat-id>
-Needs GROQ_API_KEY in memory/.env, MEMORY_ENV_FILE, or the environment.
+Needs GROQ_API_KEY in memory/.env, MEMORY_ENV_FILE, or the environment. Without one it falls back to
+OpenAI using LLM_API_KEY (the key Cognee already uses), model QUALIFIER_OPENAI_MODEL.
 
 One-time Band setup:
     band onboard --name qualifier-groq --session qualifier-groq --host generic
@@ -37,6 +38,8 @@ SESSION = "qualifier-groq"
 MEMBER_ID = re.compile(r"\bTK-\d{3,}\b")
 MEMORY_URL = os.environ.get("MEMORY_URL", "http://localhost:8000").rstrip("/")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+OPENAI_MODEL = os.environ.get("QUALIFIER_OPENAI_MODEL", "gpt-5.6-luna")
+MODEL = GROQ_MODEL  # set in main() once the provider is chosen
 
 SYSTEM_PROMPT = """You are the Qualifier on a sake tasting room's lead team. You get what we remember
 about one guest and decide what kind of lead they are and what should happen next.
@@ -68,9 +71,11 @@ def recall(member_id: str) -> str:
 
 
 def qualify(groq: OpenAI, member_id: str, memory: str) -> dict:
+    # The OpenAI fallback model only accepts its default temperature.
+    tuning = {"temperature": 0.2} if MODEL == GROQ_MODEL else {}
     completion = groq.chat.completions.create(
-        model=GROQ_MODEL,
-        temperature=0.2,
+        model=MODEL,
+        **tuning,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -127,15 +132,19 @@ def main() -> None:
     parser.add_argument("--debug", action="store_true", help="print raw Band messages")
     args = parser.parse_args()
 
-    if not os.environ.get("GROQ_API_KEY"):
-        sys.exit("Set GROQ_API_KEY first (see docstring).")
-    groq = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url="https://api.groq.com/openai/v1")
+    global MODEL
+    if os.environ.get("GROQ_API_KEY"):
+        groq, MODEL, provider = OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url="https://api.groq.com/openai/v1"), GROQ_MODEL, "Groq"
+    elif os.environ.get("LLM_API_KEY"):
+        groq, MODEL, provider = OpenAI(api_key=os.environ["LLM_API_KEY"]), OPENAI_MODEL, "OpenAI"
+    else:
+        sys.exit("Set GROQ_API_KEY (or LLM_API_KEY for the OpenAI fallback) first (see docstring).")
 
     attach = band("attach", "--host", "generic", "--host-session", f"{SESSION}-{os.getpid()}",
                   "--host-pid", str(os.getpid()), "--room", args.room)
     if attach.returncode:
         sys.exit(f"Could not join room {args.room}: {attach.stderr.strip() or attach.stdout.strip()}")
-    print(f"Qualifier online in room {args.room} (Groq model {GROQ_MODEL}).")
+    print(f"Qualifier online in room {args.room} ({provider} model {MODEL}).", flush=True)
 
     while True:
         band("inbox", "--wait", "--room", args.room, "--timeout", "60")
